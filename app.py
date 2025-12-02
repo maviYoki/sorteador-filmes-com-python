@@ -23,11 +23,11 @@ if st.button("Sortear Filme"):
         st.warning("Por favor, cole a URL da lista antes de sortear.")
     else:
         try:
-            # Headers otimizados para parecer um navegador Chrome recente
+            # Headers otimizados para evitar bloqueios e simular um PC real
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Referer': 'https://letterboxd.com/'
+                'Accept-Language': 'en-US,en;q=0.9'
             }
             
             with st.spinner('Lendo a lista de filmes...'):
@@ -55,35 +55,45 @@ if st.button("Sortear Filme"):
                         img_alt = escolhido.find("img")
                         titulo = img_alt.get('alt', 'Filme Misterioso') if img_alt else "Sem Título"
 
-                    # --- 2. Extração da Imagem (Baseada no seu snippet HTML) ---
-                    # HTML Alvo: <div class="poster film-poster"><img ...>
-                    capa = "https://s.ltrbxd.com/static/img/empty-poster-70.png"
-                    img_tag = None
+                    # --- 2. Extração da Imagem (Blindada) ---
+                    capa = None
                     
-                    # Busca exata pela div que contém a classe 'film-poster'
-                    poster_container = escolhido.find("div", class_="film-poster")
+                    # TENTATIVA 1: Busca direta pelo seletor CSS da imagem do poster
+                    # Procura img dentro de div.poster ou div.film-poster
+                    img_tag = escolhido.select_one(".poster img, .film-poster img")
                     
-                    if poster_container:
-                        img_tag = poster_container.find("img")
-                    else:
-                        # Se não achar a div específica, tenta achar a imagem direta pela classe 'image'
-                        img_tag = escolhido.find("img", class_="image")
-                    
-                    # Se ainda não achou, pega qualquer imagem dentro do card
-                    if not img_tag:
-                        img_tag = escolhido.find("img")
-
                     if img_tag:
-                        # Prioridade absoluta para o SRCSET (onde está a imagem de alta qualidade no seu snippet)
+                        # Prioridade: srcset > data-src > src
                         if img_tag.get('srcset'):
-                            # O srcset vem algo como: "url-da-imagem.jpg 2x", pegamos a primeira parte
                             capa = img_tag.get('srcset').split(" ")[0]
+                        elif img_tag.get('data-src'):
+                            capa = img_tag.get('data-src')
                         elif img_tag.get('src'):
                             capa = img_tag.get('src')
+                            
+                    # TENTATIVA 2: Se falhar, busca no atributo do container React (Backup)
+                    if not capa:
+                        div_react = escolhido.find("div", class_="react-component")
+                        if div_react and div_react.get('data-poster-url'):
+                            capa = div_react.get('data-poster-url')
                     
-                    # Tratamento de URL (garante que comece com https)
-                    if capa and not capa.startswith("http"):
-                        capa = "https://letterboxd.com" + capa
+                    # TENTATIVA 3: Varredura final por qualquer imagem válida
+                    if not capa:
+                        imgs = escolhido.find_all("img")
+                        for img in imgs:
+                            src_cand = img.get('src', '')
+                            # Pega se tiver 'resized' ou 'film-poster' na url e não for placeholder vazio
+                            if ('resized' in src_cand or 'poster' in src_cand) and 'empty' not in src_cand:
+                                capa = src_cand
+                                break
+
+                    # Tratamento final da URL
+                    if capa:
+                        if not capa.startswith("http"):
+                            # Se for link relativo, adiciona o domínio
+                            capa = "https://letterboxd.com" + capa
+                    else:
+                        capa = "https://s.ltrbxd.com/static/img/empty-poster-70.png"
 
                     # --- 3. Extração do Link ---
                     div_react = escolhido.find("div", class_="react-component")
@@ -108,6 +118,7 @@ if st.button("Sortear Filme"):
                     col1, col2 = st.columns([1, 2])
                     
                     with col1:
+                        # use_column_width ajusta melhor em mobile/telas pequenas
                         st.image(capa, use_container_width=True)
                     
                     with col2:
