@@ -23,10 +23,11 @@ if st.button("Sortear Filme"):
         st.warning("Por favor, cole a URL da lista antes de sortear.")
     else:
         try:
-            # Headers para simular um navegador real e evitar bloqueios
+            # Headers otimizados para parecer um navegador Chrome recente
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Referer': 'https://letterboxd.com/'
             }
             
             with st.spinner('Lendo a lista de filmes...'):
@@ -36,14 +37,13 @@ if st.button("Sortear Filme"):
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Tenta buscar pelo modo "Detalhado" (articles) que é o layout da sua lista
+                # Busca pelo modo "Detalhado" (articles) baseado no seu HTML
                 filmes = soup.find_all("article", class_="list-detailed-entry")
                 
-                # Se não encontrar, tenta o modo "Grade" (fallback)
+                # Fallback para modo Grade se não achar articles
                 if not filmes:
                     filmes = soup.find_all("li", class_="poster-container")
                 
-                # Se encontrou filmes, faz o sorteio
                 if filmes:
                     escolhido = random.choice(filmes)
                     
@@ -52,32 +52,38 @@ if st.button("Sortear Filme"):
                     if elemento_titulo:
                         titulo = elemento_titulo.text.strip()
                     else:
-                        # Tenta pegar do atributo alt da imagem se não tiver h2
-                        img = escolhido.find("img")
-                        titulo = img.get('alt', 'Filme Misterioso') if img else "Sem Título"
+                        img_alt = escolhido.find("img")
+                        titulo = img_alt.get('alt', 'Filme Misterioso') if img_alt else "Sem Título"
 
-                    # --- 2. Extração da Imagem (Ultra Específica) ---
-                    capa = "https://s.ltrbxd.com/static/img/empty-poster-70.png" # Imagem padrão
+                    # --- 2. Extração da Imagem (Baseada no seu snippet HTML) ---
+                    # HTML Alvo: <div class="poster film-poster"><img ...>
+                    capa = "https://s.ltrbxd.com/static/img/empty-poster-70.png"
+                    img_tag = None
                     
-                    # Primeiro, achamos a DIV do poster para não pegar imagem errada
-                    div_poster = escolhido.find("div", class_="poster")
+                    # Busca exata pela div que contém a classe 'film-poster'
+                    poster_container = escolhido.find("div", class_="film-poster")
                     
-                    if div_poster:
-                        img_tag = div_poster.find("img")
-                        if img_tag:
-                            # Prioridade 1: srcset (Melhor qualidade, comum no seu HTML)
-                            if img_tag.get('srcset'):
-                                # srcset vem como "url.jpg 2x", pegamos só a url
-                                capa = img_tag.get('srcset').split(" ")[0]
-                            # Prioridade 2: src padrão
-                            elif img_tag.get('src'):
-                                capa = img_tag.get('src')
+                    if poster_container:
+                        img_tag = poster_container.find("img")
+                    else:
+                        # Se não achar a div específica, tenta achar a imagem direta pela classe 'image'
+                        img_tag = escolhido.find("img", class_="image")
                     
-                    # Garante que a URL da imagem seja absoluta e válida
+                    # Se ainda não achou, pega qualquer imagem dentro do card
+                    if not img_tag:
+                        img_tag = escolhido.find("img")
+
+                    if img_tag:
+                        # Prioridade absoluta para o SRCSET (onde está a imagem de alta qualidade no seu snippet)
+                        if img_tag.get('srcset'):
+                            # O srcset vem algo como: "url-da-imagem.jpg 2x", pegamos a primeira parte
+                            capa = img_tag.get('srcset').split(" ")[0]
+                        elif img_tag.get('src'):
+                            capa = img_tag.get('src')
+                    
+                    # Tratamento de URL (garante que comece com https)
                     if capa and not capa.startswith("http"):
-                        # Se for link relativo, adiciona o dominio, exceto se for o placeholder
-                        if "empty-poster" not in capa:
-                            capa = "https://letterboxd.com" + capa
+                        capa = "https://letterboxd.com" + capa
 
                     # --- 3. Extração do Link ---
                     div_react = escolhido.find("div", class_="react-component")
@@ -89,20 +95,19 @@ if st.button("Sortear Filme"):
                         link_tag = escolhido.find("a")
                         link_final = "https://letterboxd.com" + link_tag['href'] if link_tag else "#"
 
-                    # --- 4. Extração da Review/Comentário ---
+                    # --- 4. Extração da Review ---
                     review = ""
                     div_texto = escolhido.find("div", class_="body-text")
                     if div_texto:
                         review = div_texto.text.strip()
 
-                    # --- Exibição do Resultado ---
+                    # --- Exibição ---
                     st.divider()
                     st.success(f"🎉 O filme escolhido foi: **{titulo}**")
                     
                     col1, col2 = st.columns([1, 2])
                     
                     with col1:
-                        # Exibe a imagem (com largura ajustada)
                         st.image(capa, use_container_width=True)
                     
                     with col2:
@@ -114,9 +119,9 @@ if st.button("Sortear Filme"):
                         st.link_button("Ver no Letterboxd", link_final)
 
                 else:
-                    st.error("Não encontrei filmes nesta página. Verifique se a lista é pública ou se o link está correto.")
+                    st.error("Não encontrei filmes. Verifique se a lista é pública.")
             else:
-                st.error(f"Erro ao conectar com o Letterboxd. Código: {response.status_code}")
+                st.error(f"Erro ao conectar: {response.status_code}")
                 
         except Exception as e:
-            st.error(f"Ocorreu um erro inesperado: {e}")
+            st.error(f"Ocorreu um erro técnico: {e}")
