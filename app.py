@@ -3,108 +3,86 @@ import requests
 from bs4 import BeautifulSoup
 import random
 
-# Configuração da página para ficar bonitinha na aba do navegador
 st.set_page_config(page_title="Sorteador Letterboxd", page_icon="🎬")
 
-# Cabeçalho
-st.title("🎬 Sorteador de Filmes")
-st.write("Não sabe o que assistir? Cola o link da sua lista do Letterboxd aí embaixo que eu escolho pra você.")
+st.title("🎬 Sorteador (Modo Detalhado)")
+st.write("Esse código foi feito sob medida para a estrutura da sua lista.")
 
-# Entrada de dados
-url_lista = st.text_input("URL da Lista (pública)", placeholder="https://letterboxd.com/seu_user/list/sua-lista/")
+url_lista = st.text_input("URL da Lista", placeholder="https://letterboxd.com/...")
 
 if st.button("Sortear Filme"):
     if not url_lista:
-        st.warning("Opa, esqueceu de colar o link!")
+        st.warning("Cole a URL primeiro.")
     else:
         try:
-            # Fingimos ser um navegador real para o site não bloquear a gente
+            # Headers para fingir ser um navegador (evita bloqueio 403)
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
-            response = requests.get(url_lista, headers=headers)
+            
+            with st.spinner('Acessando Letterboxd...'):
+                response = requests.get(url_lista, headers=headers)
             
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # --- LÓGICA DE BUSCA ---
-                # Tenta primeiro o modo "Detalhado" (que você usa)
+                # Procuramos por <article> com a classe que aparece no seu DevTools
                 filmes = soup.find_all("article", class_="list-detailed-entry")
                 
-                # Se não achar, tenta o modo "Grade" (padrão do site)
-                if not filmes:
-                    filmes = soup.find_all("li", class_="poster-container")
-
+                st.write(f"🔍 Encontrei {len(filmes)} filmes na lista.")
+                
                 if filmes:
-                    # O Sorteio
-                    total_filmes = len(filmes)
-                    numero_sorteado = random.randint(0, total_filmes - 1)
-                    filme_escolhido = filmes[numero_sorteado]
+                    # Sorteio
+                    escolhido = random.choice(filmes)
                     
-                    # --- EXTRAÇÃO DOS DADOS ---
+                    # 1. TÍTULO (Fica dentro do h2 com classe 'name')
+                    elemento_titulo = escolhido.find("h2", class_="name")
+                    titulo = elemento_titulo.text.strip() if elemento_titulo else "Título Desconhecido"
                     
-                    # 1. Título
-                    elemento_titulo = filme_escolhido.find("h2", class_="name")
-                    if elemento_titulo:
-                        nome_filme = elemento_titulo.text.strip()
-                    else:
-                        # Fallback para o modo grade, onde o titulo fica na imagem
-                        img_alt = filme_escolhido.find("img")
-                        nome_filme = img_alt['alt'] if img_alt else "Filme Misterioso"
-
-                    # 2. Imagem (Agora vai!)
-                    imagem_capa = ""
-                    # Procura a div especifica do poster para não pegar avatar de usuário errado
-                    div_poster = filme_escolhido.find("div", class_="poster")
+                    # 2. IMAGEM
+                    capa = "https://s.ltrbxd.com/static/img/empty-poster-70.png" # Fallback
+                    div_poster = escolhido.find("div", class_="poster")
+                    
                     if div_poster:
                         img_tag = div_poster.find("img")
                         if img_tag:
-                            imagem_capa = img_tag.get('src')
+                            capa = img_tag.get('src')
+                            
+                    # 3. LINK
+                    div_react = escolhido.find("div", class_="react-component")
+                    link_suffix = div_react.get('data-target-link') if div_react else None
                     
-                    # Se falhar, tenta pegar direto do article (modo grade)
-                    if not imagem_capa:
-                        img_tag = filme_escolhido.find("img")
-                        if img_tag:
-                            imagem_capa = img_tag.get('src')
-
-                    # 3. Link do filme
-                    div_figure = filme_escolhido.find("div", class_="react-component")
-                    if div_figure and div_figure.get('data-target-link'):
-                        link_filme = "https://letterboxd.com" + div_figure['data-target-link']
+                    if link_suffix:
+                        link_final = "https://letterboxd.com" + link_suffix
                     else:
-                        link_tag = filme_escolhido.find("a")
-                        link_filme = "https://letterboxd.com" + link_tag['href'] if link_tag else "#"
+                        # Tenta pegar do título se falhar
+                        link_tag = elemento_titulo.find("a") if elemento_titulo else None
+                        link_final = "https://letterboxd.com" + link_tag['href'] if link_tag else "#"
 
-                    # 4. Seu comentário (se existir)
-                    comentario = ""
-                    elemento_texto = filme_escolhido.find("div", class_="body-text")
-                    if elemento_texto:
-                        comentario = elemento_texto.text.strip()
+                    # 4. SUA REVIEW (O texto que aparece embaixo)
+                    review = ""
+                    div_texto = escolhido.find("div", class_="body-text")
+                    if div_texto:
+                        review = div_texto.text.strip()
 
-                    # --- MOSTRAR NA TELA ---
                     st.divider()
-                    st.success(f"🎲 O dado rolou e caiu no número: **{numero_sorteado + 1}**")
+                    st.success(f"🎉 Filme Sorteado: **{titulo}**")
                     
                     col1, col2 = st.columns([1, 2])
-                    
                     with col1:
-                        if imagem_capa:
-                            st.image(imagem_capa, use_container_width=True)
-                        else:
-                            st.text("🚫 Sem capa")
-                    
+                        st.image(capa, use_container_width=True)
                     with col2:
-                        st.header(nome_filme)
-                        if comentario:
-                            st.info(f"📝 **Sua nota:** \"{comentario}\"")
+                        if review:
+                            st.info(f"📝 **O que você disse:**\n\n_{review}_")
                         else:
-                            st.write("_Sem comentários nesta lista._")
+                            st.write("Sem review na lista.")
                             
-                        st.link_button("Ver no Letterboxd", link_filme)
-                    
+                        st.link_button("Ver no Letterboxd", link_final)
+
                 else:
-                    st.error("Não achei nenhum filme! Certeza que a lista é pública?")
+                    st.error("Não encontrei os itens <article>. O Letterboxd pode ter mudado o layout ou bloqueado o acesso.")
             else:
-                st.error(f"Erro ao acessar o Letterboxd (Status: {response.status_code})")
+                st.error(f"Erro {response.status_code}: O site recusou a conexão.")
+                
         except Exception as e:
-            st.error(f"Deu ruim no código: {e}")
+            st.error(f"Erro técnico: {e}")
