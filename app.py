@@ -56,24 +56,28 @@ if st.button("Sortear Filme"):
                         img = escolhido.find("img")
                         titulo = img.get('alt', 'Filme Misterioso') if img else "Sem Título"
 
-                    # --- 2. Extração da Imagem (Blindada) ---
+                    # --- 2. Extração da Imagem (Ultra Específica) ---
                     capa = "https://s.ltrbxd.com/static/img/empty-poster-70.png" # Imagem padrão
                     
-                    # Procura a tag de imagem dentro do item
-                    img_tag = escolhido.find("img")
-                    if img_tag:
-                        # O Letterboxd usa lazy loading, então a imagem real pode estar em atributos diferentes
-                        # Prioridade: srcset (melhor qualidade) > data-src > src
-                        if img_tag.get('srcset'):
-                            capa = img_tag.get('srcset').split(" ")[0] # Pega a primeira url do srcset
-                        elif img_tag.get('data-src'):
-                            capa = img_tag.get('data-src')
-                        else:
-                            capa = img_tag.get('src')
+                    # Primeiro, achamos a DIV do poster para não pegar imagem errada
+                    div_poster = escolhido.find("div", class_="poster")
                     
-                    # Garante que a URL da imagem seja absoluta
+                    if div_poster:
+                        img_tag = div_poster.find("img")
+                        if img_tag:
+                            # Prioridade 1: srcset (Melhor qualidade, comum no seu HTML)
+                            if img_tag.get('srcset'):
+                                # srcset vem como "url.jpg 2x", pegamos só a url
+                                capa = img_tag.get('srcset').split(" ")[0]
+                            # Prioridade 2: src padrão
+                            elif img_tag.get('src'):
+                                capa = img_tag.get('src')
+                    
+                    # Garante que a URL da imagem seja absoluta e válida
                     if capa and not capa.startswith("http"):
-                        capa = "https://letterboxd.com" + capa
+                        # Se for link relativo, adiciona o dominio, exceto se for o placeholder
+                        if "empty-poster" not in capa:
+                            capa = "https://letterboxd.com" + capa
 
                     # --- 3. Extração do Link ---
                     div_react = escolhido.find("div", class_="react-component")
@@ -98,6 +102,7 @@ if st.button("Sortear Filme"):
                     col1, col2 = st.columns([1, 2])
                     
                     with col1:
+                        # Exibe a imagem (com largura ajustada)
                         st.image(capa, use_container_width=True)
                     
                     with col2:
