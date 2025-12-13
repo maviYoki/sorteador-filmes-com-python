@@ -27,12 +27,14 @@ cd sorteador-filmes-com-python
 
 Instala as dependências (basicamente o Streamlit e o BeautifulSoup pra raspar o site):
 
-` pip install -r requirements.txt `
-
+```
+pip install -r requirements.txt 
+```
 
 Roda o servidor:
 
-` streamlit run app.py `
-
+```
+streamlit run app.py
+```
 
 O navegador vai abrir sozinho. Se divirta :) .
