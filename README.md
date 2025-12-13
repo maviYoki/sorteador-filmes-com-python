@@ -38,3 +38,5 @@ streamlit run app.py
 ```
 
 O navegador vai abrir sozinho. Se divirta :) .
+
+#### OBS: Se ao acessar o link da descrição ou tentar rodar o projeto e ao abri-lo em um navegador do Librewolf, provavel que dará um erro ao acessar o site, mas é por questões de segurança, se testar em outros navegadores como: Vivaldi, Opera, Edge.. irá funcionar normalmente.
